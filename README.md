@@ -12,4 +12,4 @@ BA, OBP, and SLG, as well as the teams ERA, WHIP, and K/9 to account to the bull
 Soon I made the neural network that pulled data similar to the formula file and it had similar results. I suspect I need more game data to increase it as well as more features. 
 Problem is there isnt really a good API for what I need.
 
-The TESTING file is just a program i found online similar to what i did. The accuracy was only 62%. 
+The TESTING file is just a program i found online similar to what i did. The accuracy was only 65%. 
