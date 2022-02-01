@@ -31,7 +31,8 @@ name2init = {"Astros": "HOU","Dodgers": "LAD", "Rays": "TBR", "White Sox": "CHW"
 
 pitching = pitching_stats_range("2021-04-01","2021-09-30")
 
-
+gameStatsCols =  ["Team1ID","p1ERA", "p1WHIP", "p1K9", "t1BA","t1OBP", "t1SLG", "t1ERA", "t1WHIP", "t1K9",
+                    "Team2ID","p2ERA", "p2WHIP","p2K9", "t2BA", "t2OBP", "t2SLG","t2ERA" , "t2WHIP","t2K9"]
 '''
 makeGameDataFrame
 params: 
@@ -47,12 +48,12 @@ results - if result[i][0] = 1, team 1 was the winnner
             index with 0 is loser
             result[0] will have winner of first game in data 
 '''
-def makeGameDataFrame(frame, data):
+def makeGameDataFrame(teamStats, gameData):
     ###list that will have game data
     result = []
     ##nested for loop that will go through
     ##each day
-    for month in range(4,7):
+    for month in range(4,8):
         for day in range(1,31):
             schedules = mlb.games(2021,month,day)
             games = mlb.combine_games(schedules)
@@ -82,7 +83,7 @@ def makeGameDataFrame(frame, data):
                 # some pitchers arent in the api so it becomes index error 
                 ##continue to next game
                 try:
-                    team1 = frame.loc[frame['Team'] == name2init[team1]]
+                    team1 = teamStats.loc[teamStats['Team'] == name2init[team1]]
                     df = {"Team1ID": team1.teamIDfg.values[0]}
                     p1 = pitching.loc[pitching['Name'] == pitcher1]
                     p1df = {"p1ERA": p1.ERA.values[0], "p1WHIP": p1.WHIP.values[0], "p1K9": p1.SO9.values[0]}
@@ -92,21 +93,23 @@ def makeGameDataFrame(frame, data):
                     t1pdf = {"t1ERA": team1.ERA.values[0], "t1WHIP": team1.WHIP.values[0], "t1K9": team1.K9.values[0]}
                     Merge(t1pdf,df)
                     p2 = pitching.loc[pitching['Name'] == pitcher2]
-                    team2 = frame.loc[frame['Team'] == name2init[team2]]
+                    team2 = teamStats.loc[teamStats['Team'] == name2init[team2]]
                     p2df = {"Team2ID": team2.teamIDfg.values[0], "p2ERA": p2.ERA.values[0], "p2WHIP": p2.WHIP.values[0] ,"p2K9": p2.SO9.values[0]}
                     Merge(p2df,df)
                     t2bdf = {"t2BA": team2.AVG.values[0], "t2OBP": team2.OBP.values[0], "t2SLG": team2.SLG.values[0]}
                     Merge(t2bdf,df)
                     t2pdf = {"t2ERA": team2.ERA.values[0] , "t2WHIP": team2.WHIP.values[0] ,"t2K9": team2.K9.values[0]}
                     Merge(t2pdf,df)
-                    data = data.append(df,ignore_index=True)
+                    gameData = gameData.append(df,ignore_index=True)
                     if t1:
                         result.append([1,0])
                     else:
                         result.append([0,1])
                 except IndexError:
                     continue
-    return data, result
+                except KeyError:
+                    continue
+    return gameData, result
 
 
 ##helper function that will 
@@ -115,27 +118,94 @@ def Merge(dict1, dict2):
     return(dict2.update(dict1))
 
 
+def makeModel(gameData,results):
+    model = tf.keras.Sequential([
+            tf.keras.layers.InputLayer(input_shape=(20,)),
+            tf.keras.layers.Dense(512, activation='relu'),
+            tf.keras.layers.Dense(256, activation='relu'),
+            tf.keras.layers.Dense(256, activation='relu'),
+            tf.keras.layers.Dense(256, activation='relu'),
+            tf.keras.layers.Dense(128, activation='relu'),
+            tf.keras.layers.Dense(2,activation = 'softmax')])
 
+    gameData = np.array(gameData)
+    result = np.array(results)
+    X_train, X_test, y_train, y_test = train_test_split(gameData,
+                                                        result,
+                                                        test_size=0.33,
+                                                        random_state=42)
+    model.compile(optimizer='adam',
+              loss=tf.keras.losses.MeanSquaredError(),
+              metrics=['accuracy'])
+    model.fit(X_train, y_train, epochs=10)
+
+    test_loss, test_acc = model.evaluate(X_test,  y_test, verbose=2)
+    return model
+
+def fetch_data(awayTeam, awayPitcher, homeTeam, homePitcher,teamStats):
+    tdata = pandas.DataFrame(columns = gameStatsCols)
+    team1 = teamStats.loc[teamStats['Team'] == name2init[awayTeam]]
+    df = {"Team1ID": team1.teamIDfg.values[0]}
+    p1 = pitching.loc[pitching['Name'] == awayPitcher]
+    p1df = {"p1ERA": p1.ERA.values[0], "p1WHIP": p1.WHIP.values[0], "p1K9": p1.SO9.values[0]}
+    Merge(p1df,df)
+    t1bdf = {"t1BA": team1.AVG.values[0] ,"t1OBP": team1.OBP.values[0], "t1SLG": team1.SLG.values[0]}
+    Merge(t1bdf, df)
+    t1pdf = {"t1ERA": team1.ERA.values[0], "t1WHIP": team1.WHIP.values[0], "t1K9": team1.K9.values[0]}
+    Merge(t1pdf,df)
+    p2 = pitching.loc[pitching['Name'] == homePitcher]
+    team2 = teamStats.loc[teamStats['Team'] == name2init[homeTeam]]
+    p2df = {"Team2ID": team2.teamIDfg.values[0], "p2ERA": p2.ERA.values[0], "p2WHIP": p2.WHIP.values[0] ,"p2K9": p2.SO9.values[0]}
+    Merge(p2df,df)
+    t2bdf = {"t2BA": team2.AVG.values[0], "t2OBP": team2.OBP.values[0], "t2SLG": team2.SLG.values[0]}
+    Merge(t2bdf,df)
+    t2pdf = {"t2ERA": team2.ERA.values[0] , "t2WHIP": team2.WHIP.values[0] ,"t2K9": team2.K9.values[0]}
+    Merge(t2pdf,df)
+    tdata = tdata.append(df,ignore_index=True)
+    tdata = np.array(tdata)
+    return tdata
+
+def dayPredictions(month, day, year, model,teamStats):
+    games = mlb.day(year,month,day)
+    for a_game in games:
+        print("here")
+        try:
+            ateam = a_game.away_team
+            apitcher = a_game.p_pitcher_home
+            hteam = a_game.home_team
+            hpitcher = a_game.p_pitcher_away
+            if apitcher and hpitcher != '.':
+                try:
+                    print(ateam, apitcher, hteam, hpitcher)
+                    print(model.predict(fetch_data(ateam ,apitcher, hteam, hpitcher,teamStats), verbose = 2))
+                except IndexError:
+                    print("Pass")
+                    continue
+        except AttributeError:
+            continue 
+        except KeyError:
+            continue
 def main():
     ##pulling data as a data frame
     teamBatting = team_batting(2021)
     teamPitching = team_pitching(2021)
+
     teamPitching = teamPitching[["teamIDfg", "Team","ERA","WHIP","K/9"]]
     teamBatting = teamBatting[ ["teamIDfg","AVG","OBP","SLG"]]
-    teamStatsFrame = teamPitching.merge(teamBatting)
-    teamStatsFrame.columns = ["teamIDfg", "Team","ERA","WHIP","K9","AVG","OBP","SLG"]
 
+    teamStats = teamPitching.merge(teamBatting)
+    teamStats.columns = ["teamIDfg", "Team","ERA","WHIP","K9","AVG","OBP","SLG"]
     #make dataframe that will contain all the data for each game
-    gameStatsCols =  ["Team1ID","p1ERA", "p1WHIP", "p1K9", "t1BA","t1OBP", "t1SLG", "t1ERA", "t1WHIP"
-            , "t1K9","Team2ID","p2ERA", "p2WHIP","p2K9", "t2BA", "t2OBP", "t2SLG","t2ERA" , "t2WHIP","t2K9"]
+    gameStatsCols =  ["Team1ID","p1ERA", "p1WHIP", "p1K9", "t1BA","t1OBP", "t1SLG", "t1ERA", "t1WHIP", "t1K9",
+                    "Team2ID","p2ERA", "p2WHIP","p2K9", "t2BA", "t2OBP", "t2SLG","t2ERA" , "t2WHIP","t2K9"]
     data = pandas.DataFrame(columns = gameStatsCols)
     ##data that could be normalized
     scaled_data= ["p1ERA","p1WHIP", "p1K9", "t1BA","t1OBP", "t1SLG", "t1ERA", "t1WHIP"
            ,"t1K9","p2ERA", "p2WHIP","p2K9", "t2BA", "t2OBP", "t2SLG","t2ERA" , "t2WHIP","t2K9"]
 
-    frame, result = makeGameDataFrame(teamStatsFrame, data)
-    print(frame)
-
+    gameData, result = makeGameDataFrame(teamStats, data)
+    model = makeModel(gameData,result)
+    dayPredictions(6,12,2021,model,teamStats)
 
 
 if __name__ == "__main__":
