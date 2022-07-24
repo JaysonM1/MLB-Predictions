@@ -168,7 +168,6 @@ def fetch_data(awayTeam, awayPitcher, homeTeam, homePitcher,teamStats):
 def dayPredictions(month, day, year, model,teamStats):
     games = mlb.day(year,month,day)
     for a_game in games:
-        print("here")
         try:
             ateam = a_game.away_team
             apitcher = a_game.p_pitcher_home
