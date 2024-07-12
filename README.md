@@ -9,7 +9,6 @@ At first I made my own formula that pulled data from current 2021 season. Each m
 rating should win the game. This had an accuracy of about 62-65%. The formula took into account starting pitchers ERA, WHIP, and K/9, the Teams
 BA, OBP, and SLG, as well as the teams ERA, WHIP, and K/9 to account to the bullpen and relievers. 
 
-Soon I made the neural network that pulled data similar to the formula file and it had similar results. I suspect I need more game data to increase it as well as more features. 
-Problem is there isnt really a good API for what I need.
+Soon I made the neural network that pulled data similar to the formula file and it had similar results. I suspect I need more game data to increase it as well as more features.
 
-The TESTING file is just a program i found online similar to what i did. The accuracy was only 65%. 
+
